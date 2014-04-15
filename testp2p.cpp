@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
+#include <time.h>
 
 #define INF 1e8
 #define index(i, j) (n * i) + j
@@ -19,11 +20,17 @@ int main( int argc, char *argv[]) {
 	MPI_Comm_size(MPI_COMM_WORLD, &noProcs);
 
 	if (rank == 0){
-		starttime = MPI_Wtime();
+		clock_t start,finish;
+		double totaltime;
+		start=clock();
+		//starttime = MPI_Wtime();
 		goMasterNode();
 		doPrint();
-		endtime = MPI_Wtime();
-		printf("That tooks %f secodes\n", endtime-starttime);
+		//endtime = MPI_Wtime();
+		finish=clock();
+		totaltime=(double)(finish-start)/CLOCKS_PER_SEC;
+		printf("That tooks %f secodes\n", totaltime);
+		//printf("That tooks %f secodes\n", endtime-starttime);
 	}
 	else
 		goNode();
@@ -33,7 +40,7 @@ int main( int argc, char *argv[]) {
 
 void load() {
 	int i, j, tmp;
-	char name[10];
+	char name[15];
 	printf("input file: ");
 	scanf("%s", name);
 	freopen(name, "r", stdin);
