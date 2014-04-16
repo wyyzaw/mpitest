@@ -3,11 +3,12 @@
 #include <mpi.h>
 #include <time.h>
 
-#define INF 1e8
-#define index(i, j) (n * i) + j
+#define INF 1e8	//图中不通的边以10^8表示
+#define index(i, j) (n * i) + j	//将二维位置转化为一维位置
 
 int n, rank, noProcs, *dists, *local, *counts, *zeroes, *rowK;
 double starttime,endtime;
+clock_t start,finish;
 void load();
 void setupMaster();
 void goMasterNode();
@@ -20,9 +21,9 @@ int main( int argc, char *argv[]) {
 	MPI_Comm_size(MPI_COMM_WORLD, &noProcs);
 
 	if (rank == 0){
-		clock_t start,finish;
+		
 		double totaltime;
-		start=clock();
+		
 		//starttime = MPI_Wtime();
 		goMasterNode();
 		doPrint();
@@ -45,7 +46,7 @@ void load() {
 	scanf("%s", name);
 	freopen(name, "r", stdin);
 	printf("\n");
-
+	start=clock();
 	scanf("%d", &n);
 
 	dists = (int *) malloc(sizeof(int) * n * n);
@@ -66,15 +67,16 @@ void setupMaster() {
 
 	rowsPerProc = (n / noProcs);
 
-	counts = (int*) malloc(sizeof(int) * noProcs);
-	zeroes = (int*) malloc(sizeof(int) * noProcs);
-	local  = (int*) malloc(sizeof(int) * rowsPerProc * n);
+	counts = (int*) malloc(sizeof(int) * noProcs);	//各个节点负责的数字总数
+	zeroes = (int*) malloc(sizeof(int) * noProcs);	//各个节点负责的起始数字位置
+	local  = (int*) malloc(sizeof(int) * rowsPerProc * n);	
 	start = 0;
 	for (i = 0; i <noProcs; ++i) {
 		counts[i] = rowsPerProc; 
 		counts[i] *= n;
 		zeroes[i] = start;
 		start = ((i + 1) * rowsPerProc * n);
+
 
 	}
 	if (n % noProcs != 0) {
@@ -93,42 +95,41 @@ void goMasterNode() {
 	if ((n % noProcs != 0) && (me == noProcs - 1)) {
 		me += (n % noProcs);
 	}
-	lb = (rowsPerProc) * rank;
-	ub = (rowsPerProc) * (rank + 1) - 1;
-	local  = (int*) malloc(sizeof(int) * me * n);
-	rowKSpace = (int *) malloc(sizeof(int) * n);
+	lb = (rowsPerProc) * rank;	//本节点负责的起始行数
+	ub = (rowsPerProc) * (rank + 1) - 1;	//本节点负责的结尾行数
+	local  = (int*) malloc(sizeof(int) * me * n);	////存储本节点负责的所有数字
+	rowKSpace = (int *) malloc(sizeof(int) * n);	//为当前处理行分配空间
 
 
 	MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
 	MPI_Scatterv(dists, counts, zeroes, 
 		         MPI_INT, local, counts[0], 
-		         MPI_INT, 0, MPI_COMM_WORLD);	
+		         MPI_INT, 0, MPI_COMM_WORLD);	//将矩阵发往各个节点的local
 
-	for (k = 0; k < n; ++k) {
-		owner = k / (rowsPerProc);
+	for (k = 0; k < n; ++k) {	//按列循环
+		owner = k / (rowsPerProc);	//负责处理该行的节点
 		if (owner >= noProcs) owner = noProcs - 1;
 
-		if (owner == rank)
+		if (owner == rank)	//当前节点为处理节点时从本地取得第k行元素
 			rowK = &local[(k - lb) * n];
 		else
-			rowK = rowKSpace;
+			rowK = rowKSpace;	//非处理节点时rowk为空
 
-		MPI_Bcast(rowK, n, MPI_INT, owner, MPI_COMM_WORLD);
+		MPI_Bcast(rowK, n, MPI_INT, owner, MPI_COMM_WORLD);	//处理节点广播rowk
 
-		for (i = 0; i < me; ++i) {
+		for (i = 0; i < me; ++i) {	//各节点计算各自负责区块的最短距离
 			for (j = 0; j < n; ++j) {
 				if (local[index(i, k)] + rowK[j] < local[index(i, j)])
 					local[index(i, j)] = local[index(i, k)] + rowK[j];
 			}
 		}
-
 	}
 	free(rowKSpace);
 
     MPI_Gatherv(local, counts[0], MPI_INT, 
 		        dists, counts, zeroes, 
-		        MPI_INT, 0, MPI_COMM_WORLD);
+		        MPI_INT, 0, MPI_COMM_WORLD);	//主节点收集各个节点的计算结果
 
     free(local);
 
